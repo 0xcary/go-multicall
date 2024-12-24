@@ -1,6 +1,6 @@
-module github.com/forta-network/go-multicall
+module github.com/0xcary/go-multicall
 
-go 1.19
+go 1.22
 
 require (
 	github.com/ethereum/go-ethereum v1.11.5
