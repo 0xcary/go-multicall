@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/forta-network/go-multicall"
+	"github.com/0xcary/go-multicall"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -101,7 +101,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/forta-network/go-multicall"
+	"github.com/0xcary/go-multicall"
 )
 
 const (

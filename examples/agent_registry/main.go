@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/0xcary/go-multicall"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/forta-network/go-multicall"
 )
 
 const (

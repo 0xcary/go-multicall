@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/0xcary/go-multicall/contracts/contract_multicall"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/forta-network/go-multicall/contracts/contract_multicall"
 	"github.com/stretchr/testify/require"
 )
 
