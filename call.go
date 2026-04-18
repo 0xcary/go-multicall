@@ -108,8 +108,14 @@ func (call *Call) Unpack(b []byte) error {
 	}
 
 	fieldCount := t.NumField()
+	if fieldCount > len(out) {
+		return fmt.Errorf("struct has %d fields but ABI returned %d values", fieldCount, len(out))
+	}
 	for i := 0; i < fieldCount; i++ {
 		field := t.Field(i)
+		if !field.CanSet() {
+			return fmt.Errorf("field %d (%s) is not settable (unexported?)", i, t.Type().Field(i).Name)
+		}
 		converted := abi.ConvertType(out[i], field.Interface())
 		field.Set(reflect.ValueOf(converted))
 	}

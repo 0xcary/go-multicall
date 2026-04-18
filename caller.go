@@ -85,6 +85,7 @@ func (caller *Caller) calls(opts *bind.CallOpts, calls ...*Call) ([]*Call, error
 		call.Failed = !result.Success
 		if err := call.Unpack(result.ReturnData); err != nil {
 			if call.CanFail {
+				call.Failed = true // mark as failed so callers don't need to inspect Outputs
 				log.Println(fmt.Errorf("failed to unpack call outputs at index [%d]: %v", i, err))
 				continue
 			}
