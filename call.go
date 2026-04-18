@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -77,7 +78,11 @@ func (call *Call) UnpackResult() []interface{} {
 	if call.Outputs == nil {
 		return nil
 	}
-	return call.Outputs.([]interface{})
+	result, ok := call.Outputs.([]interface{})
+	if !ok {
+		return nil
+	}
+	return result
 }
 
 // AllowFailure sets if the call is allowed to fail. This helps avoiding a revert
@@ -110,6 +115,9 @@ func (call *Call) Unpack(b []byte) error {
 	fieldCount := t.NumField()
 	if fieldCount > len(out) {
 		return fmt.Errorf("struct has %d fields but ABI returned %d values", fieldCount, len(out))
+	}
+	if len(out) > fieldCount {
+		log.Printf("warning: method '%s' returned %d values but struct only has %d fields; extra values ignored", call.Method, len(out), fieldCount)
 	}
 	for i := 0; i < fieldCount; i++ {
 		field := t.Field(i)

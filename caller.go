@@ -24,7 +24,7 @@ type Caller struct {
 // New creates a new caller.
 func New(client bind.ContractCaller, multicallAddr ...string) (*Caller, error) {
 	addr := DefaultAddress
-	if multicallAddr != nil {
+	if len(multicallAddr) > 0 {
 		addr = multicallAddr[0]
 	}
 	contract, err := contract_multicall.NewMulticallCaller(common.HexToAddress(addr), client)
@@ -107,7 +107,7 @@ func (caller *Caller) CallChunked(opts *bind.CallOpts, chunkSize int, cooldown t
 
 		chunk, err := caller.calls(opts, chunk...)
 		if err != nil {
-			return calls, fmt.Errorf("call chunk [%d] failed: %v", i, err)
+			return allCalls, fmt.Errorf("call chunk [%d] failed: %v", i, err)
 		}
 		allCalls = append(allCalls, chunk...)
 	}

@@ -306,7 +306,7 @@ func TestCaller_WrongOutputsType(t *testing.T) {
 		contract: &multicallStub{
 			returnData: func(calls []contract_multicall.Multicall3Call3) [][]byte {
 				return [][]byte{
-					packedOutput,
+					packedOutput[4:], // strip 4-byte method selector; return data is ABI-encoded outputs only
 				}
 			},
 		},
