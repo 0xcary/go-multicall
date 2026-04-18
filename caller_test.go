@@ -2,6 +2,7 @@ package multicall
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -100,6 +101,15 @@ func (ms *multicallStub) Aggregate3(opts *bind.CallOpts, calls []contract_multic
 		})
 	}
 	return
+}
+
+// multicallResultStub allows full control over per-call Success flags and errors.
+type multicallResultStub struct {
+	results func(calls []contract_multicall.Multicall3Call3) ([]contract_multicall.Multicall3Result, error)
+}
+
+func (ms *multicallResultStub) Aggregate3(opts *bind.CallOpts, calls []contract_multicall.Multicall3Call3) ([]contract_multicall.Multicall3Result, error) {
+	return ms.results(calls)
 }
 
 func TestCaller_TwoCalls(t *testing.T) {
@@ -324,6 +334,136 @@ func TestDial(t *testing.T) {
 	caller, err := Dial(context.Background(), "https://polygon-rpc.com")
 	r.NoError(err)
 	r.NotNil(caller)
+}
+
+// boolOut is a helper output struct used across CanFail tests.
+type boolOut struct {
+	Val1 bool
+}
+
+// validBoolData packs and strips the 4-byte selector, returning raw ABI-encoded output for true.
+func validBoolData(t *testing.T, c *Contract) []byte {
+	t.Helper()
+	packed, err := c.ABI.Pack("testFunc", true)
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+	return packed[4:]
+}
+
+// TestCaller_CanFail_BadReturnData verifies that when a CanFail call receives malformed
+// return data, only that call is marked Failed; other calls are unaffected and no error
+// is returned to the caller.
+func TestCaller_CanFail_BadReturnData(t *testing.T) {
+	r := require.New(t)
+
+	c1, err := NewContract(oneValueABI, testAddr1)
+	r.NoError(err)
+	c2, err := NewContract(oneValueABI, testAddr2)
+	r.NoError(err)
+
+	valid := validBoolData(t, c1)
+
+	call1 := c1.NewCall(new(boolOut), "testFunc", true)
+	call2 := c2.NewCall(new(boolOut), "testFunc", true).AllowFailure() // bad data below
+	call3 := c1.NewCall(new(boolOut), "testFunc", true)
+
+	caller := &Caller{
+		contract: &multicallResultStub{
+			results: func(calls []contract_multicall.Multicall3Call3) ([]contract_multicall.Multicall3Result, error) {
+				return []contract_multicall.Multicall3Result{
+					{Success: true, ReturnData: valid},
+					{Success: true, ReturnData: []byte{0xde, 0xad}}, // garbage — ABI decode fails
+					{Success: true, ReturnData: valid},
+				}, nil
+			},
+		},
+	}
+
+	calls, err := caller.Call(nil, call1, call2, call3)
+	r.NoError(err)
+	r.Len(calls, 3)
+
+	r.False(calls[0].Failed)
+	r.Equal(true, calls[0].Outputs.(*boolOut).Val1)
+
+	r.True(calls[1].Failed) // ABI decode failed, CanFail=true → marked Failed, no error
+
+	r.False(calls[2].Failed)
+	r.Equal(true, calls[2].Outputs.(*boolOut).Val1)
+}
+
+// TestCaller_CanFail_OnChainFailure verifies that when a CanFail call reverts on-chain
+// (Success=false), it is marked Failed and does not affect other calls.
+func TestCaller_CanFail_OnChainFailure(t *testing.T) {
+	r := require.New(t)
+
+	c, err := NewContract(oneValueABI, testAddr1)
+	r.NoError(err)
+
+	valid := validBoolData(t, c)
+
+	call1 := c.NewCall(new(boolOut), "testFunc", true)
+	call2 := c.NewCall(new(boolOut), "testFunc", true).AllowFailure()
+
+	caller := &Caller{
+		contract: &multicallResultStub{
+			results: func(calls []contract_multicall.Multicall3Call3) ([]contract_multicall.Multicall3Result, error) {
+				return []contract_multicall.Multicall3Result{
+					{Success: true, ReturnData: valid},
+					{Success: false, ReturnData: []byte{}}, // on-chain revert
+				}, nil
+			},
+		},
+	}
+
+	calls, err := caller.Call(nil, call1, call2)
+	r.NoError(err)
+	r.Len(calls, 2)
+
+	r.False(calls[0].Failed)
+	r.Equal(true, calls[0].Outputs.(*boolOut).Val1)
+
+	r.True(calls[1].Failed)
+}
+
+// TestCallChunked_ReturnsPartialOnError verifies that when a chunk fails, the results
+// from previously successful chunks are returned alongside the error.
+func TestCallChunked_ReturnsPartialOnError(t *testing.T) {
+	r := require.New(t)
+
+	c, err := NewContract(oneValueABI, testAddr1)
+	r.NoError(err)
+
+	valid := validBoolData(t, c)
+
+	call1 := c.NewCall(new(boolOut), "testFunc", true)
+	call2 := c.NewCall(new(boolOut), "testFunc", true)
+
+	callCount := 0
+	caller := &Caller{
+		contract: &multicallResultStub{
+			results: func(calls []contract_multicall.Multicall3Call3) ([]contract_multicall.Multicall3Result, error) {
+				callCount++
+				if callCount == 2 {
+					return nil, fmt.Errorf("rpc error on second chunk")
+				}
+				return []contract_multicall.Multicall3Result{
+					{Success: true, ReturnData: valid},
+				}, nil
+			},
+		},
+	}
+
+	// chunkSize=1: call1 → chunk 0 (succeeds), call2 → chunk 1 (fails)
+	result, err := caller.CallChunked(nil, 1, 0, call1, call2)
+	r.Error(err)
+	r.ErrorContains(err, "chunk [1]")
+
+	// partial results: only the successful first chunk is returned
+	r.Len(result, 1)
+	r.False(result[0].Failed)
+	r.Equal(true, result[0].Outputs.(*boolOut).Val1)
 }
 
 func TestChunkInputs(t *testing.T) {
