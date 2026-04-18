@@ -83,6 +83,9 @@ func (caller *Caller) calls(opts *bind.CallOpts, calls ...*Call) ([]*Call, error
 	for i, result := range results {
 		call := calls[i] // index always matches
 		call.Failed = !result.Success
+		if !result.Success {
+			continue
+		}
 		if err := call.Unpack(result.ReturnData); err != nil {
 			if call.CanFail {
 				call.Failed = true // mark as failed so callers don't need to inspect Outputs
